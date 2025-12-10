@@ -1,0 +1,19 @@
+---
+- name: "Connectivity Test - Cisco IOS Routers"
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: "Verify authentication and connectivity using show version"
+      cisco.ios.ios_command:
+        commands:
+          - show version | include uptime
+      register: output
+
+    - name: "Display uptime information"
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ output.stdout_lines[0] }}"
+
+    - name: "SUCCESS - Device is reachable and authenticated"
+      ansible.builtin.debug:
+        msg: "✅ {{ inventory_hostname }} - Connection successful!"
