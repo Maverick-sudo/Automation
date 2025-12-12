@@ -1,0 +1,29 @@
+---
+- name: Deploy OSPF configuration from template
+  cisco.ios.ios_config:
+    src: ospf.j2
+  notify: save config
+
+- name: Wait for OSPF to converge
+  pause:
+    seconds: 10
+
+- name: Verify OSPF neighbors
+  cisco.ios.ios_command:
+    commands:
+      - show ip ospf neighbor
+  register: ospf_neighbors
+
+- name: Display OSPF neighbors
+  debug:
+    msg: "{{ ospf_neighbors.stdout_lines }}"
+
+- name: Verify OSPF routes
+  cisco.ios.ios_command:
+    commands:
+      - show ip route ospf
+  register: ospf_routes
+
+- name: Display OSPF routes
+  debug:
+    msg: "{{ ospf_routes.stdout_lines }}"

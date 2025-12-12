@@ -1,0 +1,37 @@
+---
+hostname: R3
+
+ospf_router_id: 3.3.3.3
+
+interfaces:
+  - name: Ethernet0/3
+    description: "TO_R1_AREA1"
+    ipv4_address: 10.1.13.2
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 3.3.3.3
+    ipv4_netmask: 255.255.255.255
+    
+  - name: Loopback1
+    description: "SIMULATED_LAN"
+    ipv4_address: 10.10.3.1
+    ipv4_netmask: 255.255.255.0
+
+# OSPF Configuration - R3 is in Area 1 only
+ospf_networks:
+  - network: 10.1.13.0
+    wildcard: 0.0.0.3
+    area: 1
+    
+  - network: 3.3.3.3
+    wildcard: 0.0.0.0
+    area: 1
+    
+  - network: 10.10.3.0
+    wildcard: 0.0.0.255
+    area: 1
+
+ospf_passive_interfaces:
+  - Loopback1

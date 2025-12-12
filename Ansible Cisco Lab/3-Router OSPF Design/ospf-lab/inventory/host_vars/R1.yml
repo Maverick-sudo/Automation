@@ -1,0 +1,49 @@
+---
+hostname: R1
+
+# Router ID for OSPF
+ospf_router_id: 1.1.1.1
+
+# Interfaces configuration
+interfaces:
+  - name: Ethernet0/1
+    description: "TO_R2_AREA0_BACKBONE"
+    ipv4_address: 10.1.12.1
+    ipv4_netmask: 255.255.255.252
+    
+  - name: Ethernet0/3
+    description: "TO_R3_AREA1"
+    ipv4_address: 10.1.13.1
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 1.1.1.1
+    ipv4_netmask: 255.255.255.255
+    
+  - name: Loopback1
+    description: "SIMULATED_LAN"
+    ipv4_address: 10.10.1.1
+    ipv4_netmask: 255.255.255.0
+
+# OSPF Configuration - R1 is ABR (in both areas)
+ospf_networks:
+  - network: 10.1.12.0
+    wildcard: 0.0.0.3
+    area: 0
+    
+  - network: 10.1.13.0
+    wildcard: 0.0.0.3
+    area: 1
+    
+  - network: 1.1.1.1
+    wildcard: 0.0.0.0
+    area: 0
+    
+  - network: 10.10.1.0
+    wildcard: 0.0.0.255
+    area: 1
+
+# Passive interfaces (don't send OSPF hellos)
+ospf_passive_interfaces:
+  - Loopback1
