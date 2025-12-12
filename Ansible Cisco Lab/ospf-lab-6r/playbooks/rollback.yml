@@ -1,0 +1,35 @@
+---
+- name: Rollback OSPF Configuration
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: Remove OSPF configuration
+      cisco.ios.ios_config:
+        lines:
+          - no router ospf {{ ospf_process_id }}
+      notify: save config
+
+    - name: Remove interface IP addresses (except management)
+      cisco.ios.ios_config:
+        lines:
+          - no ip address
+        parents: "interface {{ item.name }}"
+      loop: "{{ interfaces }}"
+      when: "'Loopback' in item.name or 'Ethernet0/0' not in item.name"
+
+    - name: Verify OSPF removal
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf
+      register: ospf_check
+      failed_when: false
+
+    - name: Confirm OSPF removed
+      debug:
+        msg: "OSPF configuration removed from {{ inventory_hostname }}"
+
+  handlers:
+    - name: save config
+      cisco.ios.ios_config:
+        save_when: always

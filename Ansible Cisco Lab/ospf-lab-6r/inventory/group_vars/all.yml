@@ -1,0 +1,8 @@
+---
+# Global connection settings
+ansible_connection: ansible.netcommon.network_cli
+ansible_network_os: cisco.ios.ios
+ansible_user: ansible
+ansible_password: cisco
+ansible_become: yes
+ansible_become_method: enable

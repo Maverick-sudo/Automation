@@ -1,0 +1,4 @@
+---
+# OSPF Global Settings
+ospf_process_id: 1
+ospf_reference_bandwidth: 10000  # 10 Gbps

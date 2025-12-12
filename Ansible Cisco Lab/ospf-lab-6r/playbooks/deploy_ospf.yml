@@ -1,0 +1,40 @@
+---
+- name: Deploy 6-Router OSPF Lab Configuration
+  hosts: routers
+  gather_facts: false
+  
+  handlers:
+    - name: save config
+      cisco.ios.ios_config:
+        save_when: always
+
+  tasks:
+    - name: Gather device facts
+      cisco.ios.ios_facts:
+        gather_subset: min
+      
+    - name: Display router info
+      debug:
+        msg: "Configuring {{ inventory_hostname }} - {{ ansible_net_version }}"
+
+    - name: Apply base interface configuration
+      include_role:
+        name: base_interfaces
+      tags: ['interfaces', 'base']
+
+    - name: Apply OSPF configuration
+      include_role:
+        name: ospf
+      tags: ['ospf', 'routing']
+
+    - name: Final verification - OSPF interface status
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf interface brief
+      register: ospf_int_status
+      tags: ['verify']
+
+    - name: Display OSPF interface summary
+      debug:
+        var: ospf_int_status.stdout_lines
+      tags: ['verify']

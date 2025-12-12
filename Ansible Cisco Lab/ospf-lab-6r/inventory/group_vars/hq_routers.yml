@@ -1,0 +1,4 @@
+---
+# HQ/Core specific settings
+site_location: "Headquarters"
+ospf_default_metric: 10

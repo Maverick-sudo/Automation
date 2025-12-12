@@ -1,0 +1,48 @@
+---
+hostname: R3
+ospf_router_id: 3.3.3.3
+
+# R3 is an ABR - connects Area 0 (HQ) to Area 1 (Branches)
+interfaces:
+  - name: Ethernet0/1
+    description: "TO_R6_BRANCH_AREA1"
+    ipv4_address: 10.1.1.1
+    ipv4_netmask: 255.255.255.252
+    
+  - name: Ethernet0/2
+    description: "TO_R4_HQ_AREA0"
+    ipv4_address: 10.1.1.21
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 3.3.3.3
+    ipv4_netmask: 255.255.255.255
+    
+  - name: Loopback1
+    description: "SIMULATED_HQ_NETWORK"
+    ipv4_address: 10.10.3.1
+    ipv4_netmask: 255.255.255.0
+
+# OSPF Configuration - R3 is ABR
+ospf_networks:
+  # Area 0 networks
+  - network: 10.1.1.20
+    wildcard: 0.0.0.3
+    area: 0
+  
+  - network: 3.3.3.3
+    wildcard: 0.0.0.0
+    area: 0
+    
+  - network: 10.10.3.0
+    wildcard: 0.0.0.255
+    area: 0
+  
+  # Area 1 networks (ABR link)
+  - network: 10.1.1.0
+    wildcard: 0.0.0.3
+    area: 1
+
+ospf_passive_interfaces:
+  - Loopback1

@@ -1,0 +1,5 @@
+---
+# Default OSPF settings
+ospf_process_id: 1
+ospf_reference_bandwidth: 10000
+ospf_passive_interfaces: []

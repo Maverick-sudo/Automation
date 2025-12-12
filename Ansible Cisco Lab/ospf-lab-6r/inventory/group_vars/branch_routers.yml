@@ -1,0 +1,4 @@
+---
+# Branch specific settings
+site_location: "Remote Branch"
+ospf_default_metric: 100

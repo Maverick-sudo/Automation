@@ -1,0 +1,14 @@
+!
+router ospf {{ ospf_process_id }}
+ router-id {{ ospf_router_id }}
+ auto-cost reference-bandwidth {{ ospf_reference_bandwidth }}
+ log-adjacency-changes
+{% for network in ospf_networks %}
+ network {{ network.network }} {{ network.wildcard }} area {{ network.area }}
+{% endfor %}
+{% if ospf_passive_interfaces is defined and ospf_passive_interfaces | length > 0 %}
+{% for interface in ospf_passive_interfaces %}
+ passive-interface {{ interface }}
+{% endfor %}
+{% endif %}
+!

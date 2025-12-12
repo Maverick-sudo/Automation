@@ -1,0 +1,46 @@
+---
+hostname: R4
+ospf_router_id: 4.4.4.4
+
+# R4 is Core/Backbone - Area 0 only
+interfaces:
+  - name: Ethernet0/2
+    description: "TO_R3_HQ_AREA0"
+    ipv4_address: 10.1.1.22
+    ipv4_netmask: 255.255.255.252
+    
+  - name: Ethernet0/3
+    description: "TO_R5_HQ_AREA0"
+    ipv4_address: 10.1.1.17
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 4.4.4.4
+    ipv4_netmask: 255.255.255.255
+    
+  - name: Loopback1
+    description: "SIMULATED_HQ_NETWORK"
+    ipv4_address: 10.10.4.1
+    ipv4_netmask: 255.255.255.0
+
+# OSPF Configuration - R4 is pure Area 0
+ospf_networks:
+  - network: 10.1.1.20
+    wildcard: 0.0.0.3
+    area: 0
+    
+  - network: 10.1.1.16
+    wildcard: 0.0.0.3
+    area: 0
+  
+  - network: 4.4.4.4
+    wildcard: 0.0.0.0
+    area: 0
+    
+  - network: 10.10.4.0
+    wildcard: 0.0.0.255
+    area: 0
+
+ospf_passive_interfaces:
+  - Loopback1

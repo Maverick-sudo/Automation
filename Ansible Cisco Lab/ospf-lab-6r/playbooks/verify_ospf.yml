@@ -1,0 +1,69 @@
+---
+- name: Comprehensive OSPF Verification
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: Check OSPF process status
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf
+      register: ospf_process
+
+    - name: Display OSPF process info
+      debug:
+        msg: "{{ ospf_process.stdout_lines[0] }}"
+
+    - name: Check OSPF neighbors
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf neighbor
+      register: ospf_neighbors
+
+    - name: Verify neighbor states (should be FULL)
+      assert:
+        that:
+          - "'FULL' in ospf_neighbors.stdout[0]"
+        fail_msg: "WARNING: OSPF neighbors not in FULL state on {{ inventory_hostname }}"
+        success_msg: "✓ OSPF neighbors are FULL on {{ inventory_hostname }}"
+      ignore_errors: true
+
+    - name: Display neighbor details
+      debug:
+        msg: "{{ ospf_neighbors.stdout_lines[0] }}"
+
+    - name: Check routing table
+      cisco.ios.ios_command:
+        commands:
+          - show ip route ospf
+      register: ospf_routes
+
+    - name: Display OSPF routes
+      debug:
+        msg: "{{ ospf_routes.stdout_lines[0] }}"
+
+    - name: Check OSPF database
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf database
+      register: ospf_db
+
+    - name: Display OSPF database
+      debug:
+        msg: "{{ ospf_db.stdout_lines[0] }}"
+
+    - name: Test connectivity to all loopbacks
+      cisco.ios.ios_command:
+        commands:
+          - ping 3.3.3.3 source loopback0
+          - ping 4.4.4.4 source loopback0
+          - ping 5.5.5.5 source loopback0
+          - ping 6.6.6.6 source loopback0
+          - ping 7.7.7.7 source loopback0
+          - ping 8.8.8.8 source loopback0
+      register: connectivity_test
+      ignore_errors: true
+
+    - name: Display connectivity results
+      debug:
+        msg: "{{ connectivity_test.stdout_lines }}"

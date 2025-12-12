@@ -1,0 +1,46 @@
+---
+hostname: R6
+ospf_router_id: 6.6.6.6
+
+# R6 is Branch Router - Area 1 only
+interfaces:
+  - name: Ethernet0/1
+    description: "TO_R3_ABR_AREA1"
+    ipv4_address: 10.1.1.2
+    ipv4_netmask: 255.255.255.252
+    
+  - name: Ethernet0/2
+    description: "TO_R7_BRANCH_AREA1"
+    ipv4_address: 10.1.1.5
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 6.6.6.6
+    ipv4_netmask: 255.255.255.255
+    
+  - name: Loopback1
+    description: "SIMULATED_BRANCH_NETWORK"
+    ipv4_address: 10.10.6.1
+    ipv4_netmask: 255.255.255.0
+
+# OSPF Configuration - R6 is pure Area 1
+ospf_networks:
+  - network: 10.1.1.0
+    wildcard: 0.0.0.3
+    area: 1
+    
+  - network: 10.1.1.4
+    wildcard: 0.0.0.3
+    area: 1
+  
+  - network: 6.6.6.6
+    wildcard: 0.0.0.0
+    area: 1
+    
+  - network: 10.10.6.0
+    wildcard: 0.0.0.255
+    area: 1
+
+ospf_passive_interfaces:
+  - Loopback1
