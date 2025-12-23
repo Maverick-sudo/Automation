@@ -1,0 +1,46 @@
+---
+hostname: R5
+ospf_router_id: 5.5.5.5
+ospf_process_id: 1
+
+interfaces:
+  - name: Ethernet0/1
+    description: "TO_R4_AREA0"
+    ipv4_address: 10.10.20.1
+    ipv4_netmask: 255.255.255.252
+  
+  - name: Ethernet0/2
+    description: "TO_R6_AREA0"
+    ipv4_address: 10.10.20.5
+    ipv4_netmask: 255.255.255.252
+    
+  - name: Ethernet0/0
+    description: "TO_R8_ABR_LINK"
+    ipv4_address: 203.0.113.1
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 5.5.5.5
+    ipv4_netmask: 255.255.255.255
+
+ospf_networks:
+  # Area 0 networks
+  - network: 10.10.20.0
+    wildcard: 0.0.0.3
+    area: 0
+
+  - network: 10.10.20.4
+    wildcard: 0.0.0.3
+    area: 0
+  
+  - network: 5.5.5.5
+    wildcard: 0.0.0.0
+    area: 0
+  
+  # Area 1 networks (ABR link)
+  - network: 203.0.113.0
+    wildcard: 0.0.0.3
+    area: 1
+
+ospf_passive_interfaces: []

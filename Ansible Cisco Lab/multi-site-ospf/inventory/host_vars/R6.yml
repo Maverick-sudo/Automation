@@ -1,0 +1,36 @@
+---
+hostname: R6
+ospf_router_id: 6.6.6.6
+ospf_process_id: 1
+
+interfaces:
+  - name: Ethernet0/2
+    description: "TO_R4_AREA0"
+    ipv4_address: 10.10.20.6
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 6.6.6.6
+    ipv4_netmask: 255.255.255.255
+    
+
+ospf_networks:
+  - network: 10.10.20.0
+    wildcard: 0.0.0.3
+    area: 0
+  
+  - network: 10.10.20.4
+    wildcard: 0.0.0.3
+    area: 0
+  
+  - network: 6.6.6.6
+    wildcard: 0.0.0.0
+    area: 0
+    
+  - network: 172.16.47.0
+    wildcard: 0.0.0.255
+    area: 0
+
+ospf_passive_interfaces:
+  - Loopback1

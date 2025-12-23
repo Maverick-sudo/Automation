@@ -1,0 +1,33 @@
+---
+- name: "PHASE 1: Deploy OSPF on Directly Reachable Routers (R4, R6, R7, R9)"
+  hosts: phase1_routers
+  gather_facts: false
+  
+  handlers:
+    - name: save config
+      cisco.ios.ios_config:
+        save_when: always
+
+  tasks:
+    - name: Gather device facts
+      cisco.ios.ios_facts:
+        gather_subset: min
+      
+    - name: Display router info
+      debug:
+        msg: "Configuring {{ inventory_hostname }} - IOS {{ ansible_net_version }}"
+
+    - name: Apply base interface configuration
+      include_role:
+        name: base_interfaces
+      tags: ['interfaces', 'base']
+
+    - name: Apply OSPF configuration
+      include_role:
+        name: ospf
+      tags: ['ospf', 'routing']
+
+    - name: Display completion message
+      debug:
+        msg: "Phase 1 complete on {{ inventory_hostname }}. OSPF should now provide connectivity to ABRs."
+      tags: ['verify']

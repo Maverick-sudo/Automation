@@ -1,0 +1,94 @@
+---
+- name: Comprehensive OSPF Verification Across All Sites
+  hosts: routers
+  gather_facts: false
+
+  tasks:
+    - name: Check OSPF process status
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf
+      register: ospf_process
+
+    - name: Display OSPF process info
+      debug:
+        msg: "{{ ospf_process.stdout_lines[0] }}"
+
+    - name: Check OSPF neighbors
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf neighbor
+      register: ospf_neighbors
+
+    - name: Verify neighbor states (should be FULL)
+      assert:
+        that:
+          - "'FULL' in ospf_neighbors.stdout[0]"
+        fail_msg: "WARNING: OSPF neighbors not in FULL state on {{ inventory_hostname }}"
+        success_msg: "✓ OSPF neighbors are FULL on {{ inventory_hostname }}"
+      ignore_errors: true
+
+    - name: Display neighbor details
+      debug:
+        msg: "{{ ospf_neighbors.stdout_lines[0] }}"
+
+    - name: Check routing table
+      cisco.ios.ios_command:
+        commands:
+          - show ip route ospf
+      register: ospf_routes
+
+    - name: Display OSPF routes
+      debug:
+        msg: "{{ ospf_routes.stdout_lines[0] }}"
+
+    - name: Check OSPF database
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf database
+      register: ospf_db
+
+    - name: Display OSPF database summary
+      debug:
+        msg: "{{ ospf_db.stdout_lines[0] }}"
+
+    - name: Test connectivity to all loopbacks
+      cisco.ios.ios_command:
+        commands:
+          - ping 4.4.4.4 source loopback0
+          - ping 5.5.5.5 source loopback0
+          - ping 6.6.6.6 source loopback0
+          - ping 7.7.7.7 source loopback0
+          - ping 8.8.8.8 source loopback0
+          - ping 9.9.9.9 source loopback0
+      register: connectivity_test
+      ignore_errors: true
+
+    - name: Display connectivity results
+      debug:
+        msg: "{{ connectivity_test.stdout_lines }}"
+
+- name: Verify ABR Functionality
+  hosts: abr_routers
+  gather_facts: false
+
+  tasks:
+    - name: Check ABR inter-area routes
+      cisco.ios.ios_command:
+        commands:
+          - show ip route ospf | include IA
+      register: inter_area_routes
+
+    - name: Display inter-area routes
+      debug:
+        msg: "{{ inter_area_routes.stdout_lines[0] }}"
+
+    - name: Verify ABR is in multiple areas
+      cisco.ios.ios_command:
+        commands:
+          - show ip ospf | include Area
+      register: abr_areas
+
+    - name: Display ABR area membership
+      debug:
+        msg: "{{ abr_areas.stdout_lines[0] }}"

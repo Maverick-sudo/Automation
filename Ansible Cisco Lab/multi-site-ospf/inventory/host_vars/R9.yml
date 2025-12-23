@@ -1,0 +1,36 @@
+---
+hostname: R9
+ospf_router_id: 9.9.9.9
+ospf_process_id: 1
+
+interfaces:
+  - name: Ethernet0/2
+    description: "TO_R8_ABR1_AREA1"
+    ipv4_address: 10.10.10.6
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 9.9.9.9
+    ipv4_netmask: 255.255.255.255
+
+
+ospf_networks:
+  - network: 10.10.10.4
+    wildcard: 0.0.0.3
+    area: 1
+  
+  - network: 10.10.10.0
+    wildcard: 0.0.0.3
+    area: 1
+  
+  - network: 9.9.9.9
+    wildcard: 0.0.0.0
+    area: 1
+    
+  - network: 10.200.200.0
+    wildcard: 0.0.0.255
+    area: 1
+
+ospf_passive_interfaces:
+  - Loopback1

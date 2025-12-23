@@ -1,0 +1,35 @@
+---
+hostname: R7
+ospf_router_id: 7.7.7.7
+ospf_process_id: 1
+
+interfaces:
+  - name: Ethernet0/1
+    description: "TO_R8_ABR1_AREA1"
+    ipv4_address: 10.10.10.2
+    ipv4_netmask: 255.255.255.252
+
+  - name: Loopback0
+    description: "ROUTER_ID"
+    ipv4_address: 7.7.7.7
+    ipv4_netmask: 255.255.255.255
+
+ospf_networks:
+  - network: 10.10.10.0
+    wildcard: 0.0.0.3
+    area: 1
+
+  - network: 10.10.10.4
+    wildcard: 0.0.0.3
+    area: 1
+  
+  - network: 7.7.7.7
+    wildcard: 0.0.0.0
+    area: 1
+    
+  - network: 10.200.200.0
+    wildcard: 0.0.0.255
+    area: 1
+
+ospf_passive_interfaces:
+  - Loopback1
