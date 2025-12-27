@@ -1,3 +1,207 @@
+# Multi-Site OSPF Lab - Copilot Instructions
+
+## Project Overview
+
+**Goal:** Build a production-grade multi-area OSPF network across two geographically separated sites (Area 0 and Area 1) connected via Area Border Routers (ABRs), using Ansible automation with phased deployment to solve bootstrap connectivity challenges.
+
+---
+
+## Network Architecture
+
+### Three-Network Design
+
+**PNet0 (192.168.33.0/24)** - Management Network (NAT)
+- Purpose: Ansible SSH management, internet access
+- Connected routers: R4, R6, R7, R9
+- EVE-NG interface: 192.168.33.130
+
+**PNet1 (172.16.47.0/24)** - Site A / Area 0 Campus (Host-only with DHCP)
+- Purpose: Area 0 data plane
+- Connected routers: R4, R6
+- EVE-NG gateway: 172.16.47.129
+
+**PNet2 (10.200.200.0/24)** - Site B / Area 1 Campus (Host-only without DHCP)
+- Purpose: Area 1 data plane
+- Connected routers: R7, R9
+- EVE-NG gateway: 10.200.200.129
+
+### Topology Summary
+
+```
+Site A (Area 0):          ABRs:              Site B (Area 1):
+R4 ←→ R6                R5 ←→ R8            R7 ←→ R9
+  ↓                      ↓   ↓                 ↓
+PNet1               (not on PNet)           PNet2
+```
+
+**Key design:** R5 and R8 (ABRs) are NOT directly connected to management network (PNet0). They are reachable only through OSPF routing after Phase 1 deployment.
+
+---
+
+## Host Configuration (Already Complete)
+
+### Linux Ansible Control Node Routes
+
+```bash
+# Routes to reach Site A and Site B via EVE-NG
+ip route add 172.16.47.0/24 via 192.168.33.130
+ip route add 10.200.200.0/24 via 192.168.33.130
+```
+
+### EVE-NG Internal Routing
+
+```bash
+# EVE-NG forwarding between networks
+pnet0: 192.168.33.130  → Management
+pnet1: 172.16.47.129   → Site A gateway
+pnet2: 10.200.200.129  → Site B gateway
+
+# IP forwarding enabled
+net.ipv4.ip_forward=1
+```
+
+---
+
+## Implementation Strategy
+
+### Phased Deployment Approach
+
+**Phase 1: Bootstrap Core Routers**
+- Deploy: R4, R6 (Area 0) and R7, R9 (Area 1)
+- These routers are directly reachable from Ansible (192.168.33.x)
+- Establish OSPF within each area
+- Creates routing paths that enable Ansible to reach R5 and R8
+
+**Phase 2: Deploy ABR Routers**
+- Deploy: R5 and R8 (ABRs)
+- Now reachable via OSPF routing: R5 at 10.10.20.1, R8 at 10.10.10.1
+- Configure ABR interconnection link (203.0.113.0/30)
+- Establish inter-area OSPF routing
+
+**Why phased?** R5 and R8 are only reachable AFTER OSPF provides routing. Cannot configure them until Phase 1 establishes connectivity.
+
+---
+
+## Router Addressing
+
+### Management IPs (for Ansible SSH)
+
+| Router | Management IP | Network |
+|--------|--------------|---------|
+| R4 | 192.168.33.204 | PNet0 |
+| R5 | 10.10.20.1 (via OSPF) | Area 0 data |
+| R6 | 192.168.33.206 | PNet0 |
+| R7 | 192.168.33.207 | PNet0 |
+| R8 | 10.10.10.1 (via OSPF) | Area 1 data |
+| R9 | 192.168.33.209 | PNet0 |
+
+### Data Plane Networks
+
+- Area 0 links: 10.10.20.0/30, 10.10.20.4/30
+- Area 1 links: 10.10.10.0/30, 10.10.10.4/30
+- ABR link: 203.0.113.0/30
+- Loopbacks: X.X.X.X/32 (OSPF router IDs)
+
+---
+
+## Ansible Playbooks
+
+1. **phase1_deploy.yml** - Deploy R4, R6, R7, R9 with OSPF
+2. **phase2_abr_deploy.yml** - Deploy R5, R8 after connectivity established
+3. **verify_ospf.yml** - Comprehensive verification across all sites
+
+### Ansible Roles
+
+1. **base_interfaces** - Configure router interfaces from Jinja2 templates
+2. **ospf** - Deploy OSPF configuration with area assignments
+
+### Key Requirements
+
+- R5 and R8 must have return routes to 192.168.33.0/24 in export.cfg
+- R4, R6 default route: 172.16.47.129
+- R7, R9 default route: 10.200.200.129
+- R5, R8 specific route: 192.168.33.0/24 via their Area 0/1 neighbors
+- OSPF passive interfaces on loopbacks simulating LANs
+
+---
+
+## Expected Outcomes
+
+**After Phase 1:**
+- R4 ↔ R6 OSPF adjacency (Area 0)
+- R7 ↔ R9 adjacency may not form (R8 missing)
+- Ansible can now reach 10.10.20.1 (R5) and 10.10.10.1 (R8)
+
+**After Phase 2:**
+- R5 ↔ R8 OSPF adjacency on ABR link (Area 0 ↔ Area 1)
+- All routers have full OSPF neighbor adjacencies
+- Inter-area routes (O IA) appear in routing tables
+- Site A can communicate with Site B
+
+**Verification:**
+- All neighbors in FULL state
+- R5 and R8 show as ABRs
+- Ping connectivity between all loopbacks
+- Inter-area routes present
+
+---
+
+## File Structure Reference
+
+```
+multi-site-ospf/
+├── inventory/
+│   ├── hosts.yml (phase1_routers, phase2_routers groups)
+│   ├── host_vars/ (R4.yml through R9.yml)
+│   └── group_vars/
+├── roles/
+│   ├── base_interfaces/
+│   └── ospf/
+└── playbooks/
+    ├── phase1_deploy.yml
+    ├── phase2_abr_deploy.yml
+    └── verify_ospf.yml
+```
+
+---
+
+## Coding Agent Tasks
+
+1. Review existing example configurations in `host_vars/` for addressing scheme
+2. Review existing playbooks respect phase ordering (phase1 must complete before phase2)
+3. Review existing configurations Implemented in comprehensive verification that tests:
+   - OSPF neighbor states
+   - ABR functionality
+   - Inter-area routing
+   - End-to-end reachability
+
+---
+
+## Critical Design Decisions
+
+**Why R5/R8 aren't on PNet0:** Demonstrates real-world bootstrap problem where remote devices aren't directly management-reachable until routing is established.
+
+**Why phased deployment:** Teaches dependency management and network rollout sequencing.
+
+**Why three separate networks:** Separates management plane (PNet0) from data planes (PNet1/PNet2), realistic multi-site architecture.
+
+---
+
+## Success Criteria
+
+- [ ] Phase 1 deploys successfully to R4, R6, R7, R9
+- [ ] Ansible can reach R5 and R8 after Phase 1
+- [ ] Phase 2 deploys successfully to R5, R8
+- [ ] All OSPF neighbors achieve FULL state
+- [ ] Inter-area routes appear in routing tables
+- [ ] Ping test succeeds between all router loopbacks
+- [ ] R5 and R8 identified as ABRs in OSPF output
+
+---
+
+**Note to Agent:** All network infrastructure is configured. Focus on Ansible automation logic, Jinja2 templating, and OSPF configuration accuracy. Reference existing example files for syntax patterns.
+
+
 # Multi-Site OSPF Lab with Phased Deployment
 
 ## Lab Topology Overview
@@ -39,25 +243,49 @@ This lab demonstrates a realistic multi-site OSPF deployment across two campus n
 
 ## Prerequisites
 
-### Linux Ansible Control Node Setup
+### Step 1: Linux Ansible Control Node Setup
 
-**CRITICAL:** The Ansible control node must have routes to reach PNet1 and PNet2 networks.
+**CRITICAL:** The Ansible control node must have routes to reach PNet1 and PNet2 networks via EVE-NG.
+
+#### Add Static Routes (Temporary)
 ```bash
-# Add route to PNet1 (Area 0 Campus)
+# Add routes to lab networks
 sudo ip route add 172.16.47.0/24 via 192.168.33.130
-
-# Add route to PNet2 (Area 1 Campus)
 sudo ip route add 10.200.200.0/24 via 192.168.33.130
 
-# Verify routes
+# Verify routes are installed
 ip route show | grep -E "172.16.47|10.200.200"
+```
 
-# Make persistent (add to /etc/netplan/ or /etc/network/interfaces)
-**Note:** Replace `192.168.33.130` with your EVE-NG host IP if different.
+**Expected output:**
+```
+10.200.200.0/24 via 192.168.33.130 dev ens3
+172.16.47.0/24 via 192.168.33.130 dev ens3
+```
 
-**Make routes persistent:**
+#### Make Routes Persistent
 
-For Ubuntu/Debian with netplan:
+**For Debian with NetworkManager:**
+```bash
+# Create dispatcher script
+sudo nano /etc/NetworkManager/dispatcher.d/99-eve-routes
+```
+
+Add this content:
+```bash
+#!/bin/bash
+if [ "$2" = "up" ]; then
+    ip route add 10.200.200.0/24 via 192.168.33.130 2>/dev/null || true
+    ip route add 172.16.47.0/24 via 192.168.33.130 2>/dev/null || true
+fi
+```
+
+Make executable:
+```bash
+sudo chmod +x /etc/NetworkManager/dispatcher.d/99-eve-routes
+```
+
+**For Ubuntu with netplan:**
 ```bash
 sudo nano /etc/netplan/99-eve-routes.yaml
 ```
@@ -78,26 +306,197 @@ Apply:
 sudo netplan apply
 ```
 
-### EVE-NG Internal Routing Setup
-
-Ensure EVE-NG host has IP forwarding enabled and routes between pnet interfaces.
-
-On EVE-NG host:
+**For Debian with /etc/network/interfaces:**
 ```bash
-# Enable IP forwarding
+sudo nano /etc/network/interfaces
+```
+
+Add after your primary interface:
+```
+# Routes to EVE-NG lab networks
+up ip route add 172.16.47.0/24 via 192.168.33.130 || true
+up ip route add 10.200.200.0/24 via 192.168.33.130 || true
+```
+
+---
+
+### Step 2: EVE-NG Host Network Configuration
+
+**CRITICAL:** EVE-NG must forward packets between pnet interfaces and enable proper NAT/masquerading.
+
+#### Enable IP Forwarding (REQUIRED!)
+```bash
+# Enable immediately
 sudo sysctl -w net.ipv4.ip_forward=1
 
-# Make persistent
+# Verify it's enabled
+sysctl net.ipv4.ip_forward
+# Should show: net.ipv4.ip_forward = 1
+
+# Make persistent across reboots
 echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+```
 
-# Add iptables rules for forwarding
-sudo iptables -A FORWARD -i pnet0 -o pnet1 -j ACCEPT
+#### Disable Reverse Path Filtering
+```bash
+# Disable on all pnet interfaces
+sudo sysctl -w net.ipv4.conf.pnet0.rp_filter=0
+sudo sysctl -w net.ipv4.conf.pnet1.rp_filter=0
+sudo sysctl -w net.ipv4.conf.pnet2.rp_filter=0
+
+# Make persistent
+echo "net.ipv4.conf.pnet0.rp_filter=0" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv4.conf.pnet1.rp_filter=0" | sudo tee -a /etc/sysctl.conf
+echo "net.ipv4.conf.pnet2.rp_filter=0" | sudo tee -a /etc/sysctl.conf
+```
+
+#### Configure NAT/Masquerading Rules
+```bash
+# NAT for routers reaching management network (pnet0)
+sudo iptables -t nat -A POSTROUTING -s 172.16.47.0/24 -o pnet0 -j MASQUERADE
+sudo iptables -t nat -A POSTROUTING -s 10.200.200.0/24 -o pnet0 -j MASQUERADE
+
+# NAT for Ansible control node reaching lab networks
+sudo iptables -t nat -A POSTROUTING -s 192.168.33.0/24 -o pnet1 -j MASQUERADE
+sudo iptables -t nat -A POSTROUTING -s 192.168.33.0/24 -o pnet2 -j MASQUERADE
+
+# Verify all 4 NAT rules
+sudo iptables -t nat -L POSTROUTING -n -v
+```
+
+**Expected NAT output:**
+```
+Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination
+    0     0 MASQUERADE all  --  *      pnet0   172.16.47.0/24       0.0.0.0/0
+    0     0 MASQUERADE all  --  *      pnet0   10.200.200.0/24      0.0.0.0/0
+    0     0 MASQUERADE all  --  *      pnet1   192.168.33.0/24      0.0.0.0/0
+    0     0 MASQUERADE all  --  *      pnet2   192.168.33.0/24      0.0.0.0/0
+```
+
+#### Configure FORWARD Rules
+```bash
+# Allow traffic between all pnet interfaces
 sudo iptables -A FORWARD -i pnet1 -o pnet0 -j ACCEPT
-sudo iptables -A FORWARD -i pnet0 -o pnet2 -j ACCEPT
 sudo iptables -A FORWARD -i pnet2 -o pnet0 -j ACCEPT
+sudo iptables -A FORWARD -i pnet0 -o pnet1 -j ACCEPT
+sudo iptables -A FORWARD -i pnet0 -o pnet2 -j ACCEPT
 
-# Save rules
-sudo netfilter-persistent save
+# Verify FORWARD rules
+sudo iptables -L FORWARD -n -v
+```
+
+#### Save iptables Rules Permanently
+```bash
+# Create directory if it doesn't exist
+sudo mkdir -p /etc/iptables
+
+# Save current rules
+sudo iptables-save | sudo tee /etc/iptables/rules.v4
+
+# Install iptables-persistent for auto-restore on boot
+sudo apt-get update
+sudo apt-get install -y iptables-persistent
+
+# Or manually restore on boot by adding to /etc/rc.local:
+# iptables-restore < /etc/iptables/rules.v4
+```
+
+---
+
+### Step 3: Verify Connectivity
+
+**From Ansible Control Node (Debian):**
+```bash
+# Test ping to EVE-NG gateways
+ping -c3 192.168.33.130  # EVE-NG pnet0
+ping -c3 172.16.47.129   # EVE-NG pnet1 gateway
+ping -c3 10.200.200.129  # EVE-NG pnet2 gateway
+
+# Test ping to routers
+ping -c3 172.16.47.204   # R4
+ping -c3 172.16.47.206   # R6
+ping -c3 10.200.200.207  # R7
+ping -c3 10.200.200.209  # R9
+
+# Test SSH connectivity
+ssh ansible@172.16.47.204  # Password: ansible123
+ssh ansible@10.200.200.207
+```
+
+**All pings and SSH should work before proceeding!**
+
+---
+
+### Troubleshooting Connectivity Issues
+
+#### Issue: Routes disappear after Debian reboot
+**Cause:** Routes added with `ip route add` are not persistent.  
+**Solution:** Follow Step 1 to make routes persistent using NetworkManager dispatcher, netplan, or /etc/network/interfaces.
+
+#### Issue: Ping to routers times out, but EVE-NG gateways work
+**Symptoms:**
+```bash
+ping 172.16.47.129  # Works ✅
+ping 172.16.47.204  # Timeout ❌
+```
+
+**Diagnosis:**
+```bash
+# On EVE-NG, check IP forwarding
+sysctl net.ipv4.ip_forward
+# If shows 0, forwarding is disabled!
+```
+
+**Solution:** Enable IP forwarding on EVE-NG (see Step 2).
+
+#### Issue: Packets reach router but no reply
+**Diagnosis:**
+```bash
+# On EVE-NG
+sudo tcpdump -n -i pnet1 'icmp and host 172.16.47.204'
+# Shows only requests, no replies = router can't reach back to Debian
+```
+
+**Solution:** Router needs return route to management network (already in export.cfg):
+```cisco
+ip route 0.0.0.0 0.0.0.0 172.16.47.129  # R4, R6
+ip route 0.0.0.0 0.0.0.0 10.200.200.129 # R7, R9
+```
+
+#### Issue: tcpdump shows 0 packets on pnet interfaces
+**Diagnosis:** iptables FORWARD rules blocking traffic.
+
+**Solution:** Add FORWARD ACCEPT rules (see Step 2).
+
+#### Quick Diagnostic Commands
+```bash
+# On Debian - check routes
+ip route show
+
+# On EVE-NG - check forwarding and NAT
+sysctl net.ipv4.ip_forward
+sudo iptables -t nat -L POSTROUTING -n -v
+sudo iptables -L FORWARD -n -v
+
+# Watch packet flow
+sudo tcpdump -n -i pnet0 'host 192.168.33.149'
+```
+
+---
+
+### Complete Setup Verification Checklist
+
+Before deploying OSPF, verify:
+
+- [ ] Debian can ping EVE-NG gateways (192.168.33.130, 172.16.47.129, 10.200.200.129)
+- [ ] Debian can ping all Phase 1 routers (R4, R6, R7, R9)
+- [ ] SSH works to all Phase 1 routers (`ssh ansible@<router-ip>`)
+- [ ] Routes persist after Debian reboot
+- [ ] EVE-NG `net.ipv4.ip_forward = 1`
+- [ ] EVE-NG has 4 NAT MASQUERADE rules
+- [ ] EVE-NG has 4 FORWARD ACCEPT rules
+- [ ] iptables rules persist after EVE-NG reboot
 
 
 ---

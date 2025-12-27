@@ -31,5 +31,5 @@ ospf_networks:
     wildcard: 0.0.0.255
     area: 0
 
-ospf_passive_interfaces:
-  - Loopback1
+#ospf_passive_interfaces:
+#  - Loopback1
