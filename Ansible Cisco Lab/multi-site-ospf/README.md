@@ -386,6 +386,62 @@ sudo iptables -A FORWARD -i pnet0 -o pnet2 -j ACCEPT
 sudo iptables -L FORWARD -n -v
 ```
 
+#### Configure Static Routes for OSPF Data Plane Networks
+
+**CRITICAL:** EVE-NG needs routes to reach the OSPF data plane networks (10.10.20.0/30 and 10.10.10.0/30) so the Ansible control node can communicate with ABR routers R5 and R8.
+
+**Bug Encountered:**
+After Phase 1 deployment, attempting to SSH to R5 (10.10.20.1) and R8 (10.10.10.1) from Debian control node failed with "Connection timed out" despite:
+- Static routes existing on Debian (10.10.20.0/24 and 10.10.10.0/24 via 192.168.33.130)
+- R4 and R7 being able to ping R5 and R8 directly
+- ProxyJump via Cisco routers not working (Cisco IOS lacks SSH client)
+
+**Root Cause:**
+EVE-NG had no routes to the 10.10.20.0/30 and 10.10.10.0/30 subnets. When Debian sent packets via static routes to EVE-NG (192.168.33.130), EVE-NG didn't know where to forward them. The routers learned these networks via OSPF, but EVE-NG (not running OSPF) had no knowledge of these routes.
+
+**Solution:**
+Add static routes on EVE-NG pointing to the Phase 1 routers that have direct connectivity to R5 and R8:
+
+```bash
+# Routes to reach R5 (Area 0 data plane) via Area 0 routers
+sudo ip route add 10.10.20.0/30 via 172.16.47.204 dev pnet1  # via R4
+sudo ip route add 10.10.20.0/30 via 172.16.47.206 dev pnet1  # via R6 (backup)
+
+# Routes to reach R8 (Area 1 data plane) via Area 1 routers
+sudo ip route add 10.10.10.0/30 via 10.200.200.207 dev pnet2  # via R7
+sudo ip route add 10.10.10.0/30 via 10.200.200.209 dev pnet2  # via R9 (backup)
+
+# Verify routes installed
+ip route show | grep -E "10.10.20|10.10.10"
+```
+
+**Expected output:**
+```
+10.10.10.0/30 via 10.200.200.207 dev pnet2
+10.10.10.0/30 via 10.200.200.209 dev pnet2
+10.10.20.0/30 via 172.16.47.204 dev pnet1
+10.10.20.0/30 via 172.16.47.206 dev pnet1
+```
+
+**Make Persistent:**
+```bash
+# Add to /etc/rc.local or create systemd service
+echo "ip route add 10.10.20.0/30 via 172.16.47.204 dev pnet1 || true" | sudo tee -a /etc/rc.local
+echo "ip route add 10.10.20.0/30 via 172.16.47.206 dev pnet1 || true" | sudo tee -a /etc/rc.local
+echo "ip route add 10.10.10.0/30 via 10.200.200.207 dev pnet2 || true" | sudo tee -a /etc/rc.local
+echo "ip route add 10.10.10.0/30 via 10.200.200.209 dev pnet2 || true" | sudo tee -a /etc/rc.local
+sudo chmod +x /etc/rc.local
+```
+
+**Verification:**
+```bash
+# From Debian control node
+ping -c3 10.10.20.1  # R5
+ping -c3 10.10.10.1  # R8
+
+# Both should succeed now
+```
+
 #### Save iptables Rules Permanently
 ```bash
 # Create directory if it doesn't exist
@@ -523,15 +579,25 @@ Creates routing paths that will allow Ansible to reach R5 and R8
 
 Expected output:
 
-R4 ↔ R6 neighbors in Area 0
+R4 ↔ R6 neighbors in Area 0 (initially won't form because R5 is not configured yet)
 R7 ↔ R9 neighbors in Area 1 (initially won't form because R8 is not configured yet)
 
 Phase 2: Deploy ABR Routers
 After Phase 1, OSPF routing allows Ansible to reach R5 (172.16.47.205) and R8 (10.200.200.208). Now deploy the ABR configuration.
 
-# Test connectivity before deploying
-ping 172.16.47.205
-ping 10.200.200.208
+# Debian can't reach 10.10.x.x networks because you only added routes for:
+
+✅ 172.16.47.0/24 (PNet1)
+✅ 10.200.200.0/24 (PNet2)
+❌ 10.10.20.0/24 (Area 0 data plane)
+❌ 10.10.10.0/24 (Area 1 data plane)
+Add routes on Debian Control Node:
+# Add routes for OSPF data plane networks
+sudo ip route add 10.10.20.0/24 via 192.168.33.130
+sudo ip route add 10.10.10.0/24 via 192.168.33.130
+
+# Verify
+ip route show | grep 10.10
 
 # Deploy Phase 2 (ABR routers)
 ansible-playbook playbooks/phase2_abr_deploy.yml
@@ -559,11 +625,11 @@ Comprehensive OSPF Check
 # Run full verification playbook
 ansible-playbook playbooks/verify_ospf.yml
 Manual Verification Commands
-Check OSPF neighbors:
+# Check OSPF neighbors:
 ansible routers -m cisco.ios.ios_command -a "commands='show ip ospf neighbor'"
-Check OSPF routes:
+# Check OSPF routes:
 ansible routers -m cisco.ios.ios_command -a "commands='show ip route ospf'"
-Check ABR status:
+# Check ABR status:
 ansible abr_routers -m cisco.ios.ios_command -a "commands='show ip ospf border-routers'"
 Test inter-site connectivity:
 # From any router, should be able to ping all loopbacks
@@ -593,58 +659,6 @@ ansible R4 -m cisco.ios.ios_command -a "commands='ping 9.9.9.9 source loopback0'
 **Area 1 routers should see:**
 - O routes to other Area 1 networks
 - O IA routes to Area 0 networks
-
----
-
-## Troubleshooting
-
-### Issue: Cannot reach R5 or R8 from Ansible
-
-**Symptoms:**
-
-fatal: [R5]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect"}
-Solution:
-
-Verify Linux routes are configured:
-
-bash   ip route show | grep -E "172.16.47|10.200.200"
-
-Verify EVE-NG IP forwarding is enabled:
-
-bash   ssh root@192.168.33.130
-   sysctl net.ipv4.ip_forward
-
-# Should return: net.ipv4.ip_forward = 1
-
-Test connectivity:
-bash   ping 172.16.47.205
-   ping 10.200.200.208
-
-Check return routes on R5 and R8:
-bash   ssh ansible@172.16.47.205
-   show ip route | include 192.168.33.0
-
-# Should show static route via 172.16.47.1
-Issue: OSPF neighbors not forming
-Check interface status:
-bashansible routers -m cisco.ios.ios_command -a "commands='show ip ospf interface brief'"
-
-Check OSPF configuration:
-bashansible routers -m cisco.ios.ios_command -a "commands='show run | section router ospf'"
-
-Common issues:
-Interface down
-IP address mismatch
-Subnet mask mismatch
-Area mismatch
-Passive interface incorrectly configured
-
-Issue: Phase 1 completes but R7-R9 don't form adjacency
-This is expected! R8 is not configured in Phase 1, so R7 and R9 cannot form a full mesh until Phase 2 is deployed.
-
-fter Phase 2:
-ansible R7,R9 -m cisco.ios.ios_command -a "commands='show ip ospf neighbor'"
-# Should now see R8 as neighbor
 
 ---
 
@@ -787,11 +801,6 @@ ansible-playbook playbooks/phase1_deploy.yml
 ### Step 4: Verify Phase 1 Success
 # Check OSPF neighbors formed
 ansible phase1_routers -m cisco.ios.ios_command -a "commands='show ip ospf neighbor'"
-
-# Test connectivity to R5 and R8
-ping 172.16.47.205
-ping 10.200.200.208
-
 
 ### Step 5: Run Phase 2 Deployment
 ansible-playbook playbooks/phase2_abr_deploy.yml
